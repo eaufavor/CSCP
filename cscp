@@ -3,14 +3,13 @@
 ###
 ###   This project will copy a local file into a remote group of servers
 ###   Usage: cscp <source> <servers> [destination]
-###   Dependencies: bash, scp, /etc/clusters file 
+###   Dependencies: bash, scp, ~/.clusterssh/clusters file 
 ###   Author: Isart Montane Mogas <isart.montane@gmail.com>
 ###
-###   /etc/clusters example file
+###   ~/.clusterssh/clusters example file
 ###   #begin
-###   webserver 10.0.0.1 webserver4.domain.com 10.0.0.2 10.0.0.3
-###   databases 10.0.1.1 10.0.0.2 db3.domain.com
-###   mailserver 10.0.2.1
+###   clusters = testcluster
+###   testcluster = [user@]hostname[:port] [user@]hostname[:port]
 ###   #end
 ###
 ###
@@ -60,12 +59,12 @@ shift
 
 #getting extra options for scp
 while [ -n "$1" ] ; do
-	case "$1" in 
-		*)
-		args=$args" "$1
-		shift
-		;;
-	esac
+  case "$1" in 
+    *)
+    args=$args" "$1
+    shift
+    ;;
+  esac
 done
 
 [ ! -e $source ] && validate "" "file $source does not exists";
@@ -76,11 +75,22 @@ if [ "$destination" == "" ]; then
        destination=$source;
 fi
 
-servers=`cat /etc/clusters|grep -E "^$destination_server "`
+servers=`cat ~/.clusterssh/clusters|grep -E "^$destination_server "`
 test -z "$servers" && validate "" "Server $destination_server does not exist on /etc/clusters file"
 serversArray=`echo "$servers"|sed "s/$destination_server//g"`;
 
 for server in $serversArray; do
+       if [ $server == "=" ]; then
+         continue
+       fi
        echo "Sending $source to $server..."
-       scp $args $source $server:$destination
+       server_name=$(echo $server|sed -e "s/:/ /"|cut -d " " -f1)
+       server_port=$(echo $server|sed -e "s/:/ /"|cut -d " " -f2)
+       if [[ -n "$server_port" ]]; then
+         port_flag="-P "$server_port;
+       else
+         port_flag="";
+       fi
+       echo "$args $port_flag $source $server_name:$destination"
+       scp $args $port_flag $source $server_name:$destination
 done
