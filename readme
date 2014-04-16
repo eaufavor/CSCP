@@ -1,0 +1,13 @@
+#############
+this is the readme file for CSCP
+
+CSCP will copy a local file into a remote group of servers.
+The remote group of servers is specified on /etc/clusters (using the same format as CSSH)
+
+An example for /etc/clusters is the following
+
+###begin
+webserver 10.0.0.1 webserver4.domain.com 10.0.0.2 10.0.0.3
+databases 10.0.1.1 10.0.0.2 db3.domain.com
+mailserver 10.0.2.1
+###end

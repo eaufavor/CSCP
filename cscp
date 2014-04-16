@@ -1,0 +1,86 @@
+#!/bin/bash
+#############################################################################
+###
+###   This project will copy a local file into a remote group of servers
+###   Usage: cscp <source> <servers> [destination]
+###   Dependencies: bash, scp, /etc/clusters file 
+###   Author: Isart Montane Mogas <isart.montane@gmail.com>
+###
+###   /etc/clusters example file
+###   #begin
+###   webserver 10.0.0.1 webserver4.domain.com 10.0.0.2 10.0.0.3
+###   databases 10.0.1.1 10.0.0.2 db3.domain.com
+###   mailserver 10.0.2.1
+###   #end
+###
+###
+###   This program is free software; you can redistribute it and/or modify
+###   it under the terms of the GNU General Public License as published by
+###   the Free Software Foundation; version 2 of the License.
+### 
+###   This program is distributed in the hope that it will be useful,
+###   but WITHOUT ANY WARRANTY; without even the implied warranty of
+###   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+###   GNU General Public License for more details.
+###
+#############################################################################
+
+function usage {
+       echo "---------------------------------"
+       echo "cscp <source> <servers>:[destination] [optional-arguments]"
+       echo "---------------------------------"
+       echo "source = source file"
+       echo "servers = an entry on /etc/clusters for a group of servers"
+       echo "destination = destination file (Optional)"
+       echo "optional-arguments = These arguments will be passed to SCP (Optional)"
+       echo ""
+       echo "EXAMPLES:"
+       echo "copy my_file into /tmp of all the servers on the cluster group"
+       echo "#cscp my_file cluster:/tmp"
+       echo ""
+       echo "Copy my_file into /tmp of all the servers on the cluster group using a private key"
+       echo "#cscp my_file cluster:/tmp -i /home/myself/.ssh/private_key"
+       echo "---------------------------------"
+}
+
+function validate {
+       if [ "$1" == "" ]; then
+               echo "Error: $2";
+               usage;
+               exit 1;
+       fi
+}
+
+
+source=$1;
+shift
+destination=`echo "$1"|grep ':'|sed -r "s/(.*):(.*)/\2/g"`;
+destination_server=`echo "$1"|grep ':'|sed -r "s/(.*):(.*)/\1/g"`;
+shift
+
+#getting extra options for scp
+while [ -n "$1" ] ; do
+	case "$1" in 
+		*)
+		args=$args" "$1
+		shift
+		;;
+	esac
+done
+
+[ ! -e $source ] && validate "" "file $source does not exists";
+validate "$source" "no source file defined";
+validate "$destination_server" "no servers defined";
+
+if [ "$destination" == "" ]; then
+       destination=$source;
+fi
+
+servers=`cat /etc/clusters|grep -E "^$destination_server "`
+test -z "$servers" && validate "" "Server $destination_server does not exist on /etc/clusters file"
+serversArray=`echo "$servers"|sed "s/$destination_server//g"`;
+
+for server in $serversArray; do
+       echo "Sending $source to $server..."
+       scp $args $source $server:$destination
+done
