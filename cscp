@@ -3,7 +3,7 @@
 ###
 ###   This project will copy a local file into a remote group of servers
 ###   Usage: cscp <source> <servers> [destination]
-###   Dependencies: bash, scp, ~/.clusterssh/clusters file 
+###   Dependencies: bash, scp, ~/.clusterssh/clusters file
 ###   Author: Isart Montane Mogas <isart.montane@gmail.com>
 ###
 ###   ~/.clusterssh/clusters example file
@@ -16,7 +16,7 @@
 ###   This program is free software; you can redistribute it and/or modify
 ###   it under the terms of the GNU General Public License as published by
 ###   the Free Software Foundation; version 2 of the License.
-### 
+###
 ###   This program is distributed in the hope that it will be useful,
 ###   but WITHOUT ANY WARRANTY; without even the implied warranty of
 ###   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -25,46 +25,52 @@
 #############################################################################
 
 function usage {
-       echo "---------------------------------"
-       echo "cscp <source> <servers>:[destination] [optional-arguments]"
-       echo "---------------------------------"
-       echo "source = source file"
-       echo "servers = an entry on /etc/clusters for a group of servers"
-       echo "destination = destination file (Optional)"
-       echo "optional-arguments = These arguments will be passed to SCP (Optional)"
-       echo ""
-       echo "EXAMPLES:"
-       echo "copy my_file into /tmp of all the servers on the cluster group"
-       echo "#cscp my_file cluster:/tmp"
-       echo ""
-       echo "Copy my_file into /tmp of all the servers on the cluster group using a private key"
-       echo "#cscp my_file cluster:/tmp -i /home/myself/.ssh/private_key"
-       echo "---------------------------------"
+    echo "---------------------------------"
+    echo "cscp <source> <servers>:[destination] [optional-arguments]"
+    echo "---------------------------------"
+    echo "source = source file"
+    echo "servers = an entry on /etc/clusters for a group of servers"
+    echo "destination = destination file (Optional)"
+    echo "optional-arguments = These arguments will be passed to SCP (Optional)"
+    echo ""
+    echo "EXAMPLES:"
+    echo "copy my_file into /tmp of all the servers on the cluster group"
+    echo "#cscp my_file cluster:/tmp"
+    echo ""
+    echo "Copy my_file into /tmp of all the servers on the cluster group using a private key"
+    echo "#cscp my_file cluster:/tmp -i /home/myself/.ssh/private_key"
+    echo "---------------------------------"
 }
 
 function validate {
-       if [ "$1" == "" ]; then
-               echo "Error: $2";
-               usage;
-               exit 1;
-       fi
+    if [ "$1" == "" ]; then
+        echo "Error: $2";
+        usage;
+        exit 1;
+    fi
 }
 
 
 source=$1;
 shift
-destination=`echo "$1"|grep ':'|sed -r "s/(.*):(.*)/\2/g"`;
-destination_server=`echo "$1"|grep ':'|sed -r "s/(.*):(.*)/\1/g"`;
+user=`echo "$1"|grep '@'|sed -r "s/(.*)@(.*)/\1/g"`;
+if [ -n "$user" ]; then
+    remaining=`echo "$1"|grep '@'|sed -r "s/(.*)@(.*)/\2/g"`;
+else
+    remaining=`echo "$1"`;
+fi
+destination=`echo "$remaining"|grep ':'|sed -r "s/(.*):(.*)/\2/g"`;
+destination_server=`echo "$remaining"|grep ':'|sed -r "s/(.*):(.*)/\1/g"`;
 shift
 
 #getting extra options for scp
 while [ -n "$1" ] ; do
-  case "$1" in 
-    *)
-    args=$args" "$1
-    shift
-    ;;
-  esac
+    case "$1" in
+        *)
+        args=$args" "$1
+        shift
+        ;;
+    esac
 done
 
 [ ! -e $source ] && validate "" "file $source does not exists";
@@ -72,7 +78,7 @@ validate "$source" "no source file defined";
 validate "$destination_server" "no servers defined";
 
 if [ "$destination" == "" ]; then
-       destination=$source;
+    destination=$source;
 fi
 
 servers=`cat ~/.clusterssh/clusters|grep -E "^$destination_server "`
@@ -80,17 +86,22 @@ test -z "$servers" && validate "" "Server $destination_server does not exist on 
 serversArray=`echo "$servers"|sed "s/$destination_server//g"`;
 
 for server in $serversArray; do
-       if [ $server == "=" ]; then
-         continue
-       fi
-       echo "Sending $source to $server..."
-       server_name=$(echo $server|sed -e "s/:/ /"|cut -d " " -f1)
-       server_port=$(echo $server|sed -e "s/:/ /"|cut -d " " -f2)
-       if [[ -n "$server_port" ]]; then
-         port_flag="-P "$server_port;
-       else
-         port_flag="";
-       fi
-       echo "$args $port_flag $source $server_name:$destination"
-       scp $args $port_flag $source $server_name:$destination
+    if [ $server == "=" ]; then
+        continue
+    fi
+    echo "Sending $source to $server..."
+    server_name=$(echo $server|sed -e "s/:/ /"|cut -d " " -f1)
+    server_port=$(echo $server|sed -e "s/:/ /"|cut -d " " -f2)
+    if [ "$server_name" == "$server_port" ]; then
+        port_flag="";
+    elif [[ -n "$server_port" ]]; then
+        port_flag="-P "$server_port;
+    else
+        port_flag="";
+    fi
+    if [ -n "$user" ]; then
+        server_name="$user@$server_name"
+    fi
+    echo "$args $port_flag $source $server_name:$destination"
+    rsync $args $port_flag $source $server_name:$destination
 done
